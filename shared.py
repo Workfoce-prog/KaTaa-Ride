@@ -322,15 +322,16 @@ BKO_NEIGHBORHOODS = {
 
 
 # ----------------------------
-# COMMISSION TIERS (Lower than Heetch)
+# COMMISSION TIERS - BAMAKO LAUNCH PROMO (3–6 months)
 # ----------------------------
 def get_commission_pct(weekly_trips):
-    """Return commission percentage based on weekly trip count."""
+    # Launch promo: extremely competitive vs. Heetch
     if weekly_trips >= 60:
-        return 10
+        return 8
     elif weekly_trips >= 40:
-        return 12
+        return 10
     elif weekly_trips >= 20:
-        return 15
+        return 12
     else:
-        return 17
+        return 14
+
