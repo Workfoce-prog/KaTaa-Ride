@@ -334,4 +334,48 @@ def get_commission_pct(weekly_trips):
         return 12
     else:
         return 14
+#----------------------------------------------
+# ----------------------------
+# ADMIN LOGIN TRACKING
+# ----------------------------
+def save_admin_login_to_db(info: dict):
+    """
+    Save an admin login event to the database.
+    Expected keys: email, phone, mode, timestamp_iso.
+    """
+    try:
+        # If you use Firestore, db should already be defined above
+        if db is None:
+            return
+    except NameError:
+        return
+
+    try:
+        db.collection("admin_logins").add(info)
+    except Exception:
+        # You can log errors here if needed
+        pass
+
+
+def load_admin_logins_from_db(limit: int = 300):
+    """
+    Load recent admin login events.
+    Returns a list of dicts sorted by newest first.
+    """
+    try:
+        if db is None:
+            return []
+    except NameError:
+        return []
+
+    try:
+        ref = (
+            db.collection("admin_logins")
+            .order_by("timestamp_iso", direction="DESCENDING")
+            .limit(limit)
+        )
+        docs = ref.stream()
+        return [d.to_dict() for d in docs]
+    except Exception:
+        return []
 
