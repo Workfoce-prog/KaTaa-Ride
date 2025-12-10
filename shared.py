@@ -1,410 +1,227 @@
-
-import os
 import json
+import os
+from datetime import datetime, date
 from math import radians, sin, cos, asin, sqrt
-from datetime import datetime
 
-import pandas as pd
-import requests
-from google.cloud import firestore
-from google.oauth2 import service_account
-import streamlit as st
-## ----------------------------
-# CANCELLATION & RATING SETTINGS
-# ----------------------------
-PASSENGER_LATE_CANCEL_PCT = 0.75   # 75% of fare
-DRIVER_CANCEL_PENALTY_PCT = 0.35  # 35% of scheduled fare -> company
+# ---------------------------------
+# BASIC LANGUAGE CONFIG
+# ---------------------------------
 
-DRIVER_RATING_START = 5.0
-DRIVER_RATING_MIN = 1.0
-DRIVER_RATING_CANCEL_PENALTY = 0.2  # rating drop per bad cancellation
-
-# ----------------------------
-# GLOBAL CONFIG
-# ----------------------------
-ADMIN_CODE = "owner123"  # used in admin_app only (but imported from here)
-
-USE_REAL_ROUTING = True  # set False to fall back to haversine
-ROUTING_PROVIDER = "openrouteservice"  # or "google"
-
-# API keys from environment
-ORS_API_KEY = os.getenv("ORS_API_KEY")
-GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
-
-# ----------------------------
-# LANGUAGE LABELS
-# ----------------------------
-LANG_OPTIONS = ["English", "Français", "Bambara"]
+LANG_OPTIONS = ["English", "French", "Bambara"]
 
 labels = {
     "English": {
-        "title_driver": "🚕 Mali Ride – Driver App",
-        "title_passenger": "🚕 Mali Ride – Passenger App",
-        "title_admin": "🚕 Mali Ride – Admin Dashboard",
-        "title_mobile": "📱 Mali Ride – Mobile App (Driver & Passenger)",
-        "subtitle": "Uber-style demo for Mali with distance-based pricing and nearest-driver matching.",
-        "language_label": "Language / Langue / Kan",
-        "driver_area": "Driver",
-        "passenger_area": "Passenger",
-        "admin_area": "Admin",
-        "price_settings": "Price settings",
-        "base_fare": "Base fare (XOF)",
-        "per_mile": "Price per mile (XOF)",
-        "commission_settings": "Commission settings",
-        "platform_cut": "Platform commission (%)",
-        "driver_share": "Driver share",
-        "city_coords": "City coordinates (reference)",
-        "driver_header": "👨‍✈️ Driver Area",
-        "tab_register": "➕ Register new driver",
-        "tab_login": "🔐 Login & update status/location",
-        "register_header": "Register a new driver",
-        "first_name": "First name",
-        "last_name": "Last name",
-        "age": "Age",
-        "driver_id": "Driver ID (e.g., phone number)",
-        "driver_id_help": "This is used to login later.",
-        "transport_type": "Transportation type",
-        "payment_methods": "Accepted payment methods",
-        "pin": "Choose a 4-digit PIN",
-        "pin_help": "Very simple demo security.",
-        "location_header": "Driver location",
-        "city": "Main city (approximate)",
-        "lat": "Latitude",
-        "lon": "Longitude",
-        "register_btn": "Register driver",
-        "missing_fields": "Please fill in first name, last name, Driver ID, and PIN.",
-        "id_used": "This Driver ID is already used. Please choose another.",
-        "reg_success": "Driver {name} registered successfully as ID {id}.",
-        "login_header": "Login to update your status or location",
-        "logged_as": "Currently logged in as Driver ID:",
-        "login_id": "Driver ID",
-        "login_pin": "PIN",
-        "login_btn": "Login",
-        "login_success": "Login successful. Welcome, {name}!",
-        "login_error": "Invalid Driver ID or PIN.",
-        "update_header": "Update info",
-        "status": "Status",
-        "status_options": ["Available", "Busy", "Offline"],
-        "current_lat": "Current latitude",
-        "current_lon": "Current longitude",
-        "update_btn": "Save updates",
-        "update_success": "Driver status/location updated.",
-        "all_drivers": "All registered drivers",
-        "no_drivers": "No drivers registered yet.",
-        "drivers_map": "🗺️ Drivers map",
-        "passenger_header": "🧍‍♂️ Passenger – Request a ride",
-        "no_available": "No available drivers at the moment. Please check again later or ask drivers to set status to 'Available'.",
-        "passenger_intro": "Choose a route mode: within one city, manual GPS, or city-to-city.",
-        "route_mode": "Route mode",
-        "within_city": "Within city (same city)",
-        "within_city_city_label": "City for your ride",
-        "use_neighborhoods": "Use Bamako neighborhoods (pickup & dropoff by area)",
-        "pickup_neighborhood": "Pickup neighborhood (Bamako)",
-        "dropoff_neighborhood": "Dropoff neighborhood (Bamako)",
-        "manual_coords": "Manual coordinates (GPS)",
-        "preset_route": "City-to-city preset",
-        "from_city": "From city",
-        "to_city": "To city",
-        "pickup_header": "Pickup location",
-        "dropoff_header": "Dropoff location",
-        "pickup_lat": "Pickup latitude",
-        "pickup_lon": "Pickup longitude",
-        "drop_lat": "Dropoff latitude",
-        "drop_lon": "Dropoff longitude",
-        "trip_btn": "Find nearest drivers & estimate price",
-        "price_header": "💰 Estimated ride price",
-        "trip_distance": "Trip distance",
-        "price_estimated": "Estimated price",
-        "drivers_by_prox": "🚕 Available drivers ordered by proximity",
-        "map_pickup": "🗺️ Map – Pickup & available drivers",
-        "choose_driver": "✅ Choose a driver to book",
-        "select_driver": "Select a driver:",
-        "confirm_booking": "Confirm booking with selected driver",
-        "booking_success": "Booking confirmed with driver {name} (ID: {id}).",
-        "booking_warn": "Driver was not found in the main list (unexpected).",
-        "current_trip_header": "📦 Current trip summary",
-        "driver_id_label": "Driver ID",
-        "distance_label": "Distance",
-        "price_label": "Price",
-        "pickup_label": "Pickup",
-        "dropoff_label": "Dropoff",
-        "admin_header": "📊 Admin dashboard",
-        "admin_desc": "Simple overview of drivers and trips (demo only – in-memory or Firestore, not a full production system).",
-        "metric_drivers": "Total drivers",
+        "title_admin": "Mali Ride – Admin Dashboard",
+        "subtitle": "Real-time view of drivers, trips, payments, promotions, and cancellations.",
+        "admin_auth": "Admin access",
+        "admin_code_label": "Admin code",
+        "admin_code_hint": "Enter the admin code to unlock (not needed in demo mode).",
+        "admin_code_wrong": "Incorrect admin code.",
+        "admin_locked": "Admin area locked. Please provide a valid code.",
+        "status_options": ["Available", "On trip", "Offline"],
+        "metric_drivers": "Drivers",
         "metric_available": "Available",
-        "metric_busy": "Busy",
+        "metric_busy": "On trip",
         "metric_offline": "Offline",
-        "metric_trips": "Total trips",
-        "metric_revenue": "Total trip value (XOF)",
-        "metric_platform_revenue": "Platform commission (XOF)",
+        "metric_trips": "Trips",
+        "metric_revenue": "Gross fares (XOF)",
+        "metric_platform_revenue": "Platform revenue (XOF)",
         "metric_driver_earnings": "Driver earnings (XOF)",
         "drivers_table_header": "Drivers table",
         "trips_table_header": "Trips table",
-        "download_drivers": "Download drivers as CSV",
-        "download_trips": "Download trips as CSV",
-        "admin_auth": "Admin access",
-        "admin_code_label": "Enter admin code",
-        "admin_code_hint": "Owner / platform code to unlock dashboard.",
-        "admin_locked": "Admin dashboard is locked. Enter the correct admin code.",
-        "admin_code_wrong": "Incorrect admin code.",
-        "no_drivers_in_city": "No available drivers in this city for now.",
-        "mobile_mode_label": "Mode",
-        "mobile_driver_tab": "Driver",
-        "mobile_passenger_tab": "Passenger",
+        "no_drivers": "No drivers registered yet.",
     },
-    # (Français and Bambara omitted here for brevity in shared module – we keep them in the main app if needed)
+    "French": {
+        "title_admin": "Mali Ride – Tableau de bord Admin",
+        "subtitle": "Vue en temps réel des chauffeurs, trajets, paiements, promotions et annulations.",
+        "admin_auth": "Accès administrateur",
+        "admin_code_label": "Code admin",
+        "admin_code_hint": "Entrez le code administrateur (pas nécessaire en mode démo).",
+        "admin_code_wrong": "Code administrateur incorrect.",
+        "admin_locked": "Zone admin verrouillée. Veuillez saisir un code valide.",
+        "status_options": ["Disponible", "En course", "Hors ligne"],
+        "metric_drivers": "Chauffeurs",
+        "metric_available": "Disponibles",
+        "metric_busy": "En course",
+        "metric_offline": "Hors ligne",
+        "metric_trips": "Courses",
+        "metric_revenue": "Recettes brutes (XOF)",
+        "metric_platform_revenue": "Revenus plateforme (XOF)",
+        "metric_driver_earnings": "Gains chauffeurs (XOF)",
+        "drivers_table_header": "Table des chauffeurs",
+        "trips_table_header": "Table des courses",
+        "no_drivers": "Aucun chauffeur enregistré pour le moment.",
+    },
+    "Bambara": {
+        "title_admin": "Mali Ride – Kɔrɔba Kɛlasira",
+        "subtitle": "Donni donni fɔlɔ kɔnɔ baro ye: sɔfɔw, sɔrɔ, ka bara, ni ka kɛlaɲɛw.",
+        "admin_auth": "Kɛlasira nafalaw",
+        "admin_code_label": "Kɛlasira kɔdɔ",
+        "admin_code_hint": "I ka kɛlasira kɔdɔ na (demo mode la, tɛ se ka fɛ).",
+        "admin_code_wrong": "Kɛlasira kɔdɔ ma fɔ ye.",
+        "admin_locked": "Kɛlasira dugukolo da. Kɛ kɔdɔ bɛɛ fɛ ka fɛ.",
+        "status_options": ["Sɔrɔbaga", "Ka sɔrɔ kɔrɔbɔ", "Tɛ sɔrɔ"],
+        "metric_drivers": "Sɔfɔw",
+        "metric_available": "Sɔrɔbaga",
+        "metric_busy": "Ka sɔrɔ kɔrɔbɔ",
+        "metric_offline": "Tɛ sɔrɔ",
+        "metric_trips": "Sɔrɔw",
+        "metric_revenue": "Ka baarakɛ min bɛ na (XOF)",
+        "metric_platform_revenue": "Platform ka baarakɛ (XOF)",
+        "metric_driver_earnings": "Sɔfɔ ka baarakɛ (XOF)",
+        "drivers_table_header": "Sɔfɔw kan",
+        "trips_table_header": "Sɔrɔw kan",
+        "no_drivers": "Sɔfɔ si tɛ sɔrɔ yen.",
+    },
 }
 
-# ----------------------------
-# FIRESTORE HELPERS
-# ----------------------------
-def get_firestore_client():
-    try:
-        gcp_section = st.secrets["gcp"]
-        project_id = gcp_section["firestore_project"]
-        cred_info = json.loads(gcp_section["credentials_json"])
-        credentials = service_account.Credentials.from_service_account_info(cred_info)
-        client = firestore.Client(project=project_id, credentials=credentials)
-        return client
-    except Exception:
-        st.warning("Firestore not configured correctly. Using in-memory session only.")
-        return None
+# ---------------------------------
+# FILE PATHS
+# ---------------------------------
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # this is the folder of shared.py
+DATA_DIR = os.path.join(BASE_DIR, "data")
+
+if not os.path.exists(DATA_DIR):
+    os.makedirs(DATA_DIR, exist_ok=True)
+
+DRIVERS_PATH = os.path.join(DATA_DIR, "drivers.json")
+TRIPS_PATH = os.path.join(DATA_DIR, "trips.json")
+ADMIN_LOGINS_PATH = os.path.join(DATA_DIR, "admin_logins.json")
+
+# Some demo cities
+MALI_CITIES = ["Bamako", "Kayes", "Koulikoro", "Sikasso", "Ségou", "Mopti", "Gao", "Tombouctou", "Kidal"]
+
+
+# ---------------------------------
+# JSON HELPERS
+# ---------------------------------
+
+def _read_json(path, default):
+    if not os.path.exists(path):
+        return default
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return default
+
+
+def _write_json(path, data):
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+# ---------------------------------
+# DRIVERS
+# ---------------------------------
 
 def load_drivers_from_db():
-    client = get_firestore_client()
-    if client is None:
-        return st.session_state.get("drivers", [])
-
-    docs = client.collection("drivers").stream()
-    drivers = []
-    for doc in docs:
-        data = doc.to_dict()
-        data["id"] = doc.id
-        drivers.append(data)
-    return drivers
+    """Return list of driver dicts."""
+    return _read_json(DRIVERS_PATH, [])
 
 
-def save_driver_to_db(driver):
-    client = get_firestore_client()
-    if client is None:
-        st.session_state["drivers"].append(driver)
-        return
+def save_driver_to_db(driver_dict):
+    """Append a driver to the local JSON store."""
+    drivers = load_drivers_from_db()
+    # simple overwrite by username if exists
+    username = driver_dict.get("username")
+    existing_idx = None
+    for i, d in enumerate(drivers):
+        if d.get("username") == username:
+            existing_idx = i
+            break
+    if existing_idx is not None:
+        drivers[existing_idx] = driver_dict
+    else:
+        drivers.append(driver_dict)
+    _write_json(DRIVERS_PATH, drivers)
 
-    doc_ref = client.collection("drivers").document(driver["username"])
-    doc_ref.set(driver)
+
+def update_driver_in_db(username, new_data):
+    """Update a driver with username using new_data dict."""
+    drivers = load_drivers_from_db()
+    updated = False
+    for i, d in enumerate(drivers):
+        if d.get("username") == username:
+            drivers[i] = new_data
+            updated = True
+            break
+    if not updated:
+        drivers.append(new_data)
+    _write_json(DRIVERS_PATH, drivers)
 
 
-def update_driver_in_db(username, updates):
-    client = get_firestore_client()
-    if client is None:
-        for d in st.session_state["drivers"]:
-            if d["username"] == username:
-                d.update(updates)
-        return
-
-    doc_ref = client.collection("drivers").document(username)
-    doc_ref.set(updates, merge=True)
-
+# ---------------------------------
+# TRIPS
+# ---------------------------------
 
 def load_trips_from_db():
-    client = get_firestore_client()
-    if client is None:
-        return st.session_state.get("trips", [])
-
-    docs = client.collection("trips").order_by("created_at", direction=firestore.Query.DESCENDING).stream()
-    trips = []
-    for doc in docs:
-        data = doc.to_dict()
-        data["id"] = doc.id
-        trips.append(data)
-    return trips
+    """Return list of trip dicts."""
+    return _read_json(TRIPS_PATH, [])
 
 
-def save_trip_to_db(trip):
-    client = get_firestore_client()
-    if client is None:
-        st.session_state["trips"].append(trip)
-        return
+def save_trip_to_db(trip_dict):
+    trips = load_trips_from_db()
+    trips.append(trip_dict)
+    _write_json(TRIPS_PATH, trips)
 
-    client.collection("trips").add(trip)
 
-# ----------------------------
-# ROUTING HELPERS
-# ----------------------------
+# ---------------------------------
+# ADMIN LOGIN LOGGING
+# ---------------------------------
+
+def save_admin_login_to_db(info):
+    """Append an admin login event."""
+    logs = _read_json(ADMIN_LOGINS_PATH, [])
+    logs.append(info)
+    _write_json(ADMIN_LOGINS_PATH, logs)
+
+
+# ---------------------------------
+# DISTANCE & PRICING
+# ---------------------------------
+
 def haversine_miles(lat1, lon1, lat2, lon2):
-    lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
-    dlon = lon2 - lon1
-    dlat = lat2 - lat1
-    a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
+    """Compute distance in miles between two lat/lon pairs."""
+    if None in (lat1, lon1, lat2, lon2):
+        return 0.0
+    R_km = 6371.0
+    lat1_r, lon1_r, lat2_r, lon2_r = map(radians, [lat1, lon1, lat2, lon2])
+    dlon = lon2_r - lon1_r
+    dlat = lat2_r - lat1_r
+    a = sin(dlat / 2) ** 2 + cos(lat1_r) * cos(lat2_r) * sin(dlon / 2) ** 2
     c = 2 * asin(sqrt(a))
-    km = 6371 * c
+    km = R_km * c
     miles = km * 0.621371
     return miles
 
 
-def get_distance_miles_openrouteservice(lat1, lon1, lat2, lon2):
-    if not ORS_API_KEY:
-        return haversine_miles(lat1, lon1, lat2, lon2)
-
-    url = "https://api.openrouteservice.org/v2/directions/driving-car"
-    headers = {"Authorization": ORS_API_KEY, "Content-Type": "application/json"}
-    payload = {"coordinates": [[lon1, lat1], [lon2, lat2]]}
-
-    try:
-        resp = requests.post(url, json=payload, headers=headers, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-        meters = data["features"][0]["properties"]["segments"][0]["distance"]
-        miles = meters * 0.000621371
-        return miles
-    except Exception:
-        return haversine_miles(lat1, lon1, lat2, lon2)
+BASE_FARE_XOF = 700  # example base fare
+PER_MILE_XOF = 300   # per mile
 
 
-def get_distance_miles_google(lat1, lon1, lat2, lon2):
-    if not GOOGLE_MAPS_API_KEY:
-        return haversine_miles(lat1, lon1, lat2, lon2)
-
-    base_url = "https://maps.googleapis.com/maps/api/distancematrix/json"
-    params = {
-        "origins": f"{lat1},{lon1}",
-        "destinations": f"{lat2},{lon2}",
-        "mode": "driving",
-        "units": "imperial",
-        "key": GOOGLE_MAPS_API_KEY,
-    }
-
-    try:
-        resp = requests.get(base_url, params=params, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-        element = data["rows"][0]["elements"][0]
-        if element.get("status") != "OK":
-            return haversine_miles(lat1, lon1, lat2, lon2)
-        meters = element["distance"]["value"]
-        miles = meters * 0.000621371
-        return miles
-    except Exception:
-        return haversine_miles(lat1, lon1, lat2, lon2)
+def compute_price_xof(distance_miles):
+    """Simple distance-based pricing."""
+    if distance_miles is None:
+        distance_miles = 0.0
+    fare = BASE_FARE_XOF + PER_MILE_XOF * distance_miles
+    return max(int(round(fare)), BASE_FARE_XOF)
 
 
-def get_trip_distance_miles(lat1, lon1, lat2, lon2):
-    if not USE_REAL_ROUTING:
-        return haversine_miles(lat1, lon1, lat2, lon2)
+# ---------------------------------
+# COMMISSION TIERS (Heetch-beating)
+# ---------------------------------
 
-    if ROUTING_PROVIDER == "openrouteservice":
-        return get_distance_miles_openrouteservice(lat1, lon1, lat2, lon2)
-    elif ROUTING_PROVIDER == "google":
-        return get_distance_miles_google(lat1, lon1, lat2, lon2)
-    else:
-        return haversine_miles(lat1, lon1, lat2, lon2)
-
-
-def compute_fare(distance_miles, base_fare=1000, per_mile=300):
-    return round(base_fare + per_mile * distance_miles, 0)
------------------------------------
-##Cancelation Policy Helpers
------------------------------------
-from datetime import datetime, timedelta
-
-def passenger_can_cancel(trip: dict, now_utc: datetime | None = None) -> bool:
+def get_commission_pct(weekly_trips: int) -> int:
     """
-    Returns True if passenger is allowed to cancel with no fee.
-    Rule: free cancellation only if >= 4 hours before scheduled time.
+    Heetch-beating tiers, lower commission for hard-working drivers.
+
+    60+ trips / week  -> 8%
+    40–59             -> 10%
+    20–39             -> 12%
+    0–19              -> 14%
     """
-    if now_utc is None:
-        now_utc = datetime.utcnow()
-
-    sched = trip.get("scheduled_for")
-    if not sched:
-        # if no scheduled time, treat as immediate -> no free window
-        return False
-
-    if isinstance(sched, str):
-        try:
-            sched = datetime.fromisoformat(sched)
-        except Exception:
-            return False
-
-    return sched - now_utc >= timedelta(hours=4)
-
-
-def apply_passenger_cancellation(trip: dict) -> dict:
-    """
-    Apply passenger cancellation rule:
-    - If within 4h window => 75% fee of travel fare.
-    - Fee goes to company (platform); driver earns 0 on this trip.
-    """
-    fare = float(trip.get("price_xof", 0))
-    cancel_fee = round(fare * PASSENGER_LATE_CANCEL_PCT)
-
-    trip["status"] = "cancelled_by_passenger"
-    trip["cancellation_reason"] = "late_passenger"
-    trip["cancellation_fee_xof"] = cancel_fee
-    trip["platform_commission_xof"] = cancel_fee
-    trip["driver_earnings_xof"] = 0
-    return trip
-
-
-def apply_driver_cancellation(trip: dict) -> dict:
-    """
-    Apply driver cancellation:
-    - Company collects 35% of scheduled fare as penalty.
-    - Driver gets 0 on this trip.
-    """
-    fare = float(trip.get("price_xof", 0))
-    penalty = round(fare * DRIVER_CANCEL_PENALTY_PCT)
-
-    trip["status"] = "cancelled_by_driver"
-    trip["cancellation_reason"] = "driver_cancel"
-    trip["cancellation_fee_xof"] = penalty
-    trip["platform_commission_xof"] = penalty
-    trip["driver_earnings_xof"] = 0
-    return trip
-
-
-def penalize_driver_rating(driver: dict) -> dict:
-    """
-    Drop rating a bit each time they cancel a scheduled trip.
-    """
-    rating = float(driver.get("rating", DRIVER_RATING_START))
-    rating -= DRIVER_RATING_CANCEL_PENALTY
-    rating = max(DRIVER_RATING_MIN, rating)
-    driver["rating"] = round(rating, 2)
-    driver["cancel_count"] = int(driver.get("cancel_count", 0)) + 1
-    return driver
-
-# Approximate city centers in Mali
-MALI_CITIES = {
-    "Bamako": (12.6392, -8.0029),
-    "Kayes": (14.4469, -11.4445),
-    "Ségou": (13.4317, -6.2157),
-    "Mopti": (14.4843, -4.1828),
-    "Sikasso": (11.3170, -5.6665),
-    "Gao": (16.2667, -0.0500),
-    "Tombouctou": (16.7666, -3.0026),
-}
-
-# Approximate Bamako neighborhoods (center points)
-BKO_NEIGHBORHOODS = {
-    "ACI 2000": (12.6475, -7.9835),
-    "Kalaban-Coura": (12.6100, -7.9660),
-    "Badalabougou": (12.6290, -7.9900),
-    "Hamdallaye": (12.6540, -7.9810),
-    "Lafiabougou": (12.6520, -8.0100),
-    "Magnambougou": (12.6250, -7.9500),
-    "Sogoniko": (12.6100, -7.9500),
-    "Baco-Djicoroni": (12.6040, -8.0400),
-    "Djélibougou": (12.6400, -7.9400),
-}
-
-
-# ----------------------------
-# COMMISSION TIERS - BAMAKO LAUNCH PROMO (3–6 months)
-# ----------------------------
-def get_commission_pct(weekly_trips):
-    # Launch promo: extremely competitive vs. Heetch
     if weekly_trips >= 60:
         return 8
     elif weekly_trips >= 40:
@@ -413,48 +230,72 @@ def get_commission_pct(weekly_trips):
         return 12
     else:
         return 14
-#----------------------------------------------
-# ----------------------------
-# ADMIN LOGIN TRACKING
-# ----------------------------
-def save_admin_login_to_db(info: dict):
-    """
-    Save an admin login event to the database.
-    Expected keys: email, phone, mode, timestamp_iso.
-    """
-    try:
-        # If you use Firestore, db should already be defined above
-        if db is None:
-            return
-    except NameError:
-        return
-
-    try:
-        db.collection("admin_logins").add(info)
-    except Exception:
-        # You can log errors here if needed
-        pass
 
 
-def load_admin_logins_from_db(limit: int = 300):
-    """
-    Load recent admin login events.
-    Returns a list of dicts sorted by newest first.
-    """
-    try:
-        if db is None:
-            return []
-    except NameError:
-        return []
+def split_fare(price_xof, commission_pct):
+    """Return (platform_commission_xof, driver_earnings_xof)."""
+    if price_xof is None:
+        price_xof = 0
+    commission = int(round(price_xof * commission_pct / 100.0))
+    driver_amount = price_xof - commission
+    if driver_amount < 0:
+        driver_amount = 0
+    return commission, driver_amount
 
-    try:
-        ref = (
-            db.collection("admin_logins")
-            .order_by("timestamp_iso", direction="DESCENDING")
-            .limit(limit)
-        )
-        docs = ref.stream()
-        return [d.to_dict() for d in docs]
-    except Exception:
-        return []
+
+# ---------------------------------
+# CANCELLATION RULES
+# ---------------------------------
+
+PASSENGER_LATE_CANCEL_FEE_PCT = 75  # % of fare
+DRIVER_CANCEL_PENALTY_PCT = 35      # % of fare
+DRIVER_RATING_PENALTY_STEP = 0.2    # rating drop per cancellation
+DRIVER_MIN_RATING = 1.0
+
+
+def apply_passenger_cancellation(trip):
+    """
+    Apply passenger cancellation logic to a trip dict.
+
+    Assumes `trip` has:
+      - price_xof
+      - scheduled_time_iso (optional for real scheduling)
+    """
+    price = trip.get("price_xof", 0)
+    fee = int(round(price * PASSENGER_LATE_CANCEL_FEE_PCT / 100.0))
+    trip["status"] = "cancelled_by_passenger"
+    trip["cancellation_fee_xof"] = fee
+    trip["platform_commission_xof"] = fee
+    trip["driver_earnings_xof"] = 0
+    return trip
+
+
+def apply_driver_cancellation(trip):
+    """
+    Apply driver cancellation logic to a trip dict.
+    35% penalty goes to platform, driver earns 0.
+    """
+    price = trip.get("price_xof", 0)
+    fee = int(round(price * DRIVER_CANCEL_PENALTY_PCT / 100.0))
+    trip["status"] = "cancelled_by_driver"
+    trip["cancellation_fee_xof"] = fee
+    trip["platform_commission_xof"] = fee
+    trip["driver_earnings_xof"] = 0
+    return trip
+
+
+def penalize_driver_rating(driver_dict):
+    """
+    Reduce driver rating when they cancel a trip.
+    """
+    rating = float(driver_dict.get("rating", 5.0))
+    cancel_count = int(driver_dict.get("cancel_count", 0))
+
+    rating = max(DRIVER_MIN_RATING, rating - DRIVER_RATING_PENALTY_STEP)
+    cancel_count += 1
+
+    driver_dict["rating"] = rating
+    driver_dict["cancel_count"] = cancel_count
+    return driver_dict
+
 
