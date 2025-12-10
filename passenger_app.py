@@ -26,7 +26,7 @@ st.sidebar.markdown("### 🌍 Language / Langue / Kan")
 lang = st.sidebar.selectbox("", LANG_OPTIONS, index=0)
 
 def L(key):
-    return labels.get(lang, labels["English"]).get(key, key)
+    return labels.get(lang, labels["English" "French"]).get(key, key)
 
 st.title(L("title_passenger"))
 st.caption(L("subtitle"))
