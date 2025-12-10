@@ -26,6 +26,7 @@ st.title(L("title_admin"))
 st.caption(L("subtitle"))
 
 # ----------------------------
+# ----------------------------
 # SIDEBAR – ADMIN AUTH with AUTO-EXPIRE DEMO MODE + LOGIN TRACKING
 # ----------------------------
 st.sidebar.markdown("### 🔑 " + L("admin_auth"))
@@ -101,4 +102,3 @@ else:
 if not st.session_state["admin_ok"]:
     st.warning(L("admin_locked"))
     st.stop()
-
