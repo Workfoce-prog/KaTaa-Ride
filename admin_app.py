@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 from datetime import date
@@ -8,8 +7,9 @@ from shared import (
     labels,
     load_drivers_from_db,
     load_trips_from_db,
-    ADMIN_CODE,  # kept for later if you want to re-lock
+    ADMIN_CODE,
 )
+
 
 st.set_page_config(page_title="Mali Ride – Admin Dashboard", layout="wide")
 
