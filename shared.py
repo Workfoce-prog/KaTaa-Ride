@@ -9,6 +9,15 @@ import requests
 from google.cloud import firestore
 from google.oauth2 import service_account
 import streamlit as st
+## ----------------------------
+# CANCELLATION & RATING SETTINGS
+# ----------------------------
+PASSENGER_LATE_CANCEL_PCT = 0.75   # 75% of fare
+DRIVER_CANCEL_PENALTY_PCT = 0.35  # 35% of scheduled fare -> company
+
+DRIVER_RATING_START = 5.0
+DRIVER_RATING_MIN = 1.0
+DRIVER_RATING_CANCEL_PENALTY = 0.2  # rating drop per bad cancellation
 
 # ----------------------------
 # GLOBAL CONFIG
@@ -294,7 +303,77 @@ def get_trip_distance_miles(lat1, lon1, lat2, lon2):
 
 def compute_fare(distance_miles, base_fare=1000, per_mile=300):
     return round(base_fare + per_mile * distance_miles, 0)
+-----------------------------------
+##Cancelation Policy Helpers
+-----------------------------------
+from datetime import datetime, timedelta
 
+def passenger_can_cancel(trip: dict, now_utc: datetime | None = None) -> bool:
+    """
+    Returns True if passenger is allowed to cancel with no fee.
+    Rule: free cancellation only if >= 4 hours before scheduled time.
+    """
+    if now_utc is None:
+        now_utc = datetime.utcnow()
+
+    sched = trip.get("scheduled_for")
+    if not sched:
+        # if no scheduled time, treat as immediate -> no free window
+        return False
+
+    if isinstance(sched, str):
+        try:
+            sched = datetime.fromisoformat(sched)
+        except Exception:
+            return False
+
+    return sched - now_utc >= timedelta(hours=4)
+
+
+def apply_passenger_cancellation(trip: dict) -> dict:
+    """
+    Apply passenger cancellation rule:
+    - If within 4h window => 75% fee of travel fare.
+    - Fee goes to company (platform); driver earns 0 on this trip.
+    """
+    fare = float(trip.get("price_xof", 0))
+    cancel_fee = round(fare * PASSENGER_LATE_CANCEL_PCT)
+
+    trip["status"] = "cancelled_by_passenger"
+    trip["cancellation_reason"] = "late_passenger"
+    trip["cancellation_fee_xof"] = cancel_fee
+    trip["platform_commission_xof"] = cancel_fee
+    trip["driver_earnings_xof"] = 0
+    return trip
+
+
+def apply_driver_cancellation(trip: dict) -> dict:
+    """
+    Apply driver cancellation:
+    - Company collects 35% of scheduled fare as penalty.
+    - Driver gets 0 on this trip.
+    """
+    fare = float(trip.get("price_xof", 0))
+    penalty = round(fare * DRIVER_CANCEL_PENALTY_PCT)
+
+    trip["status"] = "cancelled_by_driver"
+    trip["cancellation_reason"] = "driver_cancel"
+    trip["cancellation_fee_xof"] = penalty
+    trip["platform_commission_xof"] = penalty
+    trip["driver_earnings_xof"] = 0
+    return trip
+
+
+def penalize_driver_rating(driver: dict) -> dict:
+    """
+    Drop rating a bit each time they cancel a scheduled trip.
+    """
+    rating = float(driver.get("rating", DRIVER_RATING_START))
+    rating -= DRIVER_RATING_CANCEL_PENALTY
+    rating = max(DRIVER_RATING_MIN, rating)
+    driver["rating"] = round(rating, 2)
+    driver["cancel_count"] = int(driver.get("cancel_count", 0)) + 1
+    return driver
 
 # Approximate city centers in Mali
 MALI_CITIES = {
