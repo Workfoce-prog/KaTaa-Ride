@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 from datetime import date
@@ -20,6 +21,7 @@ lang = st.sidebar.selectbox("", LANG_OPTIONS, index=0)
 
 def L(key):
     return labels.get(lang, labels.get("English", {})).get(key, key)
+
 
 st.title(L("title_admin"))
 st.caption(L("subtitle"))
