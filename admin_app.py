@@ -8,7 +8,7 @@ from shared import (
     labels,
     load_drivers_from_db,
     load_trips_from_db,
-    ADMIN_CODE,
+    ADMIN_CODE,  # kept for later if you want to re-lock
 )
 
 st.set_page_config(page_title="Mali Ride – Admin Dashboard", layout="wide")
@@ -26,16 +26,14 @@ st.title(L("title_admin"))
 st.caption(L("subtitle"))
 
 # ----------------------------
-# ----------------------------
-# ----------------------------
 # SIDEBAR – ADMIN (FULLY UNLOCKED FOR REAL-TIME DEMO)
 # ----------------------------
 st.sidebar.markdown("### 🔑 " + L("admin_auth"))
 
 st.sidebar.success(
     "✅ Admin dashboard is currently **UNLOCKED** for real-time demo.\n"
-    "Anyone with the link can view metrics."
+    "Anyone with the link can view all metrics and app analytics."
 )
 
-# Always treat admin as authenticated
+# Always treat admin as authenticated in this demo
 st.session_state["admin_ok"] = True
