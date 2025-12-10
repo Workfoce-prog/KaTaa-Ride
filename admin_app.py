@@ -1,12 +1,13 @@
 import streamlit as st
 import pandas as pd
 from datetime import date
-from shared import (
-    LANG_OPTIONS,
-    labels,
-    load_drivers_from_db,
-    load_trips_from_db,
-    ADMIN_CODE,
+
+from shared import(
+     LANG_OPTIONS,
+     labels,
+     load_drivers_from_db,
+     load_trips_from_db,
+     ADMIN_CODE,
 )
 st.set_page_config(page_title="Mali Ride – Admin Dashboard", layout="wide")
 
