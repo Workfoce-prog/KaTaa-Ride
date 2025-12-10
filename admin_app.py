@@ -19,7 +19,7 @@ st.sidebar.markdown("### 🌍 Language / Langue / Kan")
 lang = st.sidebar.selectbox("", LANG_OPTIONS, index=0)
 
 def L(key):
-    return labels.get(lang, labels["English"]).get(key, key)
+    return labels.get(lang, labels.get("English", {})).get(key, key)
 
 st.title(L("title_admin"))
 st.caption(L("subtitle"))
@@ -150,6 +150,40 @@ with col_g:
     st.metric(L("metric_platform_revenue") + " (filtered)", f"{total_platform:,.0f}")
 with col_h:
     st.metric(L("metric_driver_earnings") + " (filtered)", f"{total_driver:,.0f}")
+
+# ----------------------------
+# POLICY EXPLAINER (CANCELLATION + PAYMENTS)
+# ----------------------------
+st.markdown("---")
+with st.expander("📜 Cancellation & payment policy (demo)", expanded=False):
+    st.markdown(
+        """
+**Passenger cancellations**
+
+- A trip can be scheduled in advance (date + time).
+- If the passenger cancels **4 hours or more** before the scheduled time:
+  - ✅ Free cancellation – no fee, no payout.
+- If the passenger cancels **less than 4 hours** before the trip:
+  - ❌ A **75% cancellation fee** is charged on the fare.
+  - The **75% goes to the platform** as compensation.
+  - Driver earnings for that trip become **0 XOF**.
+
+**Driver cancellations**
+
+- If a driver cancels a scheduled trip:
+  - ❌ A **35% penalty** (of the scheduled fare) is taken by the platform.
+  - Driver earnings for that trip become **0 XOF**.
+  - The driver’s **rating is reduced**, and `cancel_count` increments.
+
+**Normal payments**
+
+- For completed trips, the fare is split:
+  - Passenger pays `price_xof`.
+  - Platform keeps `platform_commission_xof` (tier-based commission).
+  - Driver receives `driver_earnings_xof`.
+- Commission tiers are dynamic (launch promo), based on trips in the last 7 days.
+        """
+    )
 
 # ----------------------------
 # APP MODULES OVERVIEW TABS
@@ -339,6 +373,61 @@ with tab_mobile:
         )
 
 # ----------------------------
+# PAYMENTS & CANCELLATION ANALYTICS
+# ----------------------------
+st.markdown("---")
+st.subheader("💵 Payments & cancellation analytics (filtered)")
+
+if not df_trips_filtered.empty:
+    # Status breakdown
+    if "status" in df_trips_filtered.columns:
+        status_counts = df_trips_filtered["status"].value_counts().reset_index()
+        status_counts.columns = ["status", "count"]
+
+        st.markdown("**Trips by status (completed vs cancelled)**")
+        st.dataframe(status_counts)
+        st.bar_chart(status_counts.set_index("status")["count"])
+
+        cancelled_passenger = int(
+            df_trips_filtered["status"].eq("cancelled_by_passenger").sum()
+        )
+        cancelled_driver = int(
+            df_trips_filtered["status"].eq("cancelled_by_driver").sum()
+        )
+
+        col_c1, col_c2 = st.columns(2)
+        with col_c1:
+            st.metric("Trips cancelled by passenger", cancelled_passenger)
+        with col_c2:
+            st.metric("Trips cancelled by driver", cancelled_driver)
+
+    # Cancellation fees
+    if "cancellation_fee_xof" in df_trips_filtered.columns:
+        total_cancel_fees = float(
+            df_trips_filtered["cancellation_fee_xof"].fillna(0).sum()
+        )
+    else:
+        total_cancel_fees = 0.0
+
+    st.metric("Total cancellation fees (XOF)", f"{total_cancel_fees:,.0f}")
+
+    # Payment flow: passenger -> platform -> driver
+    flows = {
+        "Passenger gross fares (price_xof)": total_gross,
+        "Platform revenue (commission + penalties)": total_platform,
+        "Driver payouts (earnings)": total_driver,
+    }
+    df_flows = pd.DataFrame(
+        [{"flow": name, "amount_xof": val} for name, val in flows.items()]
+    )
+
+    st.markdown("**Payment flow summary (filtered)**")
+    st.dataframe(df_flows)
+    st.bar_chart(df_flows.set_index("flow")["amount_xof"])
+else:
+    st.info("No trips in the current filter range to compute payments or cancellations.")
+
+# ----------------------------
 # RAW TABLES AT BOTTOM
 # ----------------------------
 st.markdown("---")
@@ -354,3 +443,4 @@ if not df_trips_filtered.empty:
     st.dataframe(df_trips_filtered)
 else:
     st.info("No trips (for current filters).")
+
