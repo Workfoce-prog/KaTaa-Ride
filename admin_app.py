@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 from datetime import date
-
 from shared import (
      LANG_OPTIONS,
      labels,
@@ -10,7 +9,6 @@ from shared import (
      ADMIN_CODE,
 )
 st.set_page_config(page_title="Mali Ride – Admin Dashboard", layout="wide")
-
 # ----------------------------
 # LANGUAGE
 # ----------------------------
@@ -23,12 +21,10 @@ def L(key):
 
 st.title(L("title_admin"))
 st.caption(L("subtitle"))
-
 # ----------------------------
 # SIDEBAR – ADMIN (FULLY UNLOCKED FOR REAL-TIME DEMO)
 # ----------------------------
 st.sidebar.markdown("### 🔑 " + L("admin_auth"))
-
 st.sidebar.success(
     "✅ Admin dashboard is currently **UNLOCKED** for real-time demo.\n"
     "Anyone with the link can view all metrics and app analytics."
